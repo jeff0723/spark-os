@@ -1,9 +1,12 @@
 import { Hono } from "hono";
 
 // Cloudflare Worker bindings. These are declared in wrangler.jsonc and grow as
-// M1 lands (D1 for the data model, Workers AI for the agent loop, etc.).
+// M1 lands (Workers AI for the agent loop, etc.).
 type Bindings = {
   ASSETS: Fetcher;
+  // Core data model (users, intents, tasks, agent_runs, outputs). Schema in
+  // migrations/0001_init.sql; CRUD routes land in the intents/agent-loop tasks.
+  DB: D1Database;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();

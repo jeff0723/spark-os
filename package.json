@@ -11,7 +11,11 @@
     "preview": "vite preview",
     "deploy": "npm run build && wrangler deploy",
     "deploy:pages": "npm run build && touch docs/.nojekyll",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "db:create": "wrangler d1 create spark-os",
+    "db:migrate": "wrangler d1 migrations apply spark-os --remote",
+    "db:migrate:local": "wrangler d1 migrations apply spark-os --local",
+    "db:console": "wrangler d1 execute spark-os --local --command"
   },
   "dependencies": {
     "hono": "^4.6.14",

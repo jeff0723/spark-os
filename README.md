@@ -27,7 +27,7 @@ Chosen to be boring, fast, and deployable from the first commit:
 | Host         | **Cloudflare Workers**              | Managed, global, CI-free `wrangler deploy`. D1 + Workers AI on-tap.   |
 | Backend      | **Hono** (TypeScript)               | Tiny, fast router that runs natively on Workers.                      |
 | Frontend     | **Vite + React + TypeScript** (SPA) | Fast, conventional, well-documented.                                  |
-| Database     | **Cloudflare D1** (SQLite)          | _Next task ([TES-3]) — wired into `wrangler.jsonc` when the schema lands._ |
+| Database     | **Cloudflare D1** (SQLite)          | Managed SQLite on the same account. Schema in `migrations/` — see [Data model](#data-model). |
 | Agent / LLM  | **Cloudflare Workers AI**           | _Later M1 task — same account, no extra vendor._                      |
 | Pkg manager  | **pnpm**                            | Fast, disk-efficient.                                                 |
 
@@ -40,8 +40,9 @@ output serves from a Worker root **or** a GitHub Pages project subpath.
 ├── index.html          # Vite entry (frontend)
 ├── src/                # React frontend (App.tsx, main.tsx, index.css)
 ├── worker/             # Hono backend (worker/index.ts) — the /api routes
+├── migrations/         # D1 (SQLite) schema migrations — see Data model
 ├── docs/               # Build output — GitHub Pages publish dir (committed)
-├── wrangler.jsonc      # Cloudflare Worker config (API + static assets)
+├── wrangler.jsonc      # Cloudflare Worker config (API + static assets + D1)
 └── vite.config.ts      # base "./", builds into docs/
 ```
 
@@ -69,6 +70,66 @@ Quick check of the full-stack path:
 curl http://localhost:8787/api/health
 # {"ok":true,"service":"spark-os","version":"0.1.0"}
 ```
+
+## Data model
+
+The data layer is **Cloudflare D1** (managed SQLite), bound to the Worker as
+`DB`. The schema is the spine of the product: a user states an **intent**, Spark
+breaks it into **tasks**, each task is executed by one or more **agent runs**,
+and each run produces **outputs**.
+
+```
+users ──1:N──> intents ──1:N──> tasks ──1:N──> agent_runs ──1:N──> outputs
+                                   └───────────────────────1:N──────────┘
+                                       (outputs also carry task_id, denormalized)
+```
+
+| Table        | Purpose                                              | Key relationships                          |
+| ------------ | ---------------------------------------------------- | ------------------------------------------ |
+| `users`      | The human account that owns everything.              | —                                          |
+| `intents`    | A natural-language goal ("plan my launch week").     | `user_id → users.id`                       |
+| `tasks`      | A unit of work Spark derives from an intent.         | `intent_id → intents.id`                   |
+| `agent_runs` | One execution attempt of an agent against a task.    | `task_id → tasks.id`                       |
+| `outputs`    | A result artifact produced by an agent run.          | `agent_run_id → agent_runs.id`, `task_id → tasks.id` |
+
+**Conventions:**
+
+- **IDs** are app-generated UUID strings (`crypto.randomUUID()` in the Worker) —
+  D1 has no `gen_random_uuid()`.
+- **Timestamps** are ISO-8601 UTC strings; `created_at` defaults in SQL,
+  `updated_at` is kept fresh by triggers.
+- **Lifecycle** columns (`status`, output `type`) use `CHECK` constraints rather
+  than lookup tables — minimal and easy to widen later.
+- **Foreign keys cascade on delete** down the whole chain (delete a user and
+  their intents, tasks, runs, and outputs all go).
+
+**Modeling tradeoffs** (deliberate, reversible):
+
+- `agent_runs` is a separate table (not a column on `tasks`) so a task can be
+  **retried** — many runs per task, latest is current. Costs one extra join; buys
+  a full execution history for the live dashboard.
+- `outputs.task_id` is **denormalized** (also reachable via `agent_run_id`) so the
+  dashboard can list a task's outputs without joining through runs. Both columns
+  cascade from `tasks`, so they can't drift.
+- Statuses are CHECK-constrained strings, not a `statuses` table. Widening the set
+  is a one-line migration; the simplicity is worth losing referential rigor here.
+- `agent_runs.input` / `outputs.content` hold JSON/text blobs rather than typed
+  columns — the agent payload shape is still moving in M1; we'll normalize once it
+  settles.
+
+**Migrations** live in `migrations/` and are applied with `wrangler`:
+
+```bash
+pnpm db:create          # one-time: create the D1 database (records database_id)
+pnpm db:migrate:local   # apply migrations to the local dev DB (.wrangler/state)
+pnpm db:migrate         # apply migrations to the remote (prod) DB
+pnpm db:console "SELECT * FROM users"   # ad-hoc query against the local DB
+```
+
+> Requires **Node 22+** (wrangler 4). `pnpm db:create` writes the real
+> `database_id` into `wrangler.jsonc`, replacing the committed placeholder; it
+> needs Cloudflare account access (same blocker as deploy, below). Local
+> migrations (`--local`) work today with no account.
 
 ## Deploy
 

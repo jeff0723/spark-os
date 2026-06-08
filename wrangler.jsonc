@@ -14,8 +14,19 @@
   },
   "observability": {
     "enabled": true
-  }
-  // M1 bindings get added here as tasks land, e.g.:
-  // "d1_databases": [{ "binding": "DB", "database_name": "spark-os", "database_id": "..." }],
+  },
+  // Core data model lives in D1 (SQLite). Migrations are in ./migrations and
+  // applied with `pnpm db:migrate:local` / `pnpm db:migrate`. The placeholder
+  // database_id is replaced by the real id once Cloudflare account access is
+  // restored (see README → Deploy); local dev works without it via `--local`.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "spark-os",
+      "database_id": "PLACEHOLDER_RUN_wrangler_d1_create_spark-os",
+      "migrations_dir": "migrations"
+    }
+  ]
+  // Added in a later M1 task:
   // "ai": { "binding": "AI" }
 }
