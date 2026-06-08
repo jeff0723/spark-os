@@ -51,7 +51,8 @@ agent runs) build on top of it.
 
 ## Run locally
 
-Requires Node 20+ and pnpm.
+Requires **Node 22+** and pnpm. (Vite dev runs on Node 20, but anything that
+shells out to `wrangler` — `dev:worker`, `deploy`, `db:*` — needs Node 22+.)
 
 ```bash
 pnpm install
@@ -144,14 +145,27 @@ pnpm deploy        # = npm run build && wrangler deploy
 This builds the frontend into `docs/` and deploys the Worker (API + static
 assets) to `https://spark-os.<your-subdomain>.workers.dev`.
 
-> **Current blocker:** the `wrangler` session in this environment is
-> authenticated but the OAuth token has **no accessible Cloudflare account**
-> (it can authenticate but `GET /accounts` is empty and `/memberships` returns
-> an auth error, so `wrangler deploy` cannot resolve an account). Restoring
-> access is an account-owner action: either re-run `wrangler login` and grant
-> the spark-os account, or set `CLOUDFLARE_ACCOUNT_ID` to an account the token
-> is a member of. Tracked as a follow-up; until then the live URL is GitHub
-> Pages (below).
+> **Current blocker (TES-7):** there is **no valid Cloudflare credential** in
+> this environment — `wrangler whoami` returns `Invalid access token [code:
+> 9109]` (the stored OAuth token has expired) and no `CLOUDFLARE_API_TOKEN` is
+> set, so `wrangler deploy` has nothing to authenticate with. Restoring access
+> is an account-owner action; pick one:
+>
+> 1. Re-run `wrangler login` on the machine and grant the spark-os account, **or**
+> 2. Set `CLOUDFLARE_API_TOKEN` (scopes: Account Settings:Read, Workers
+>    Scripts:Edit, D1:Edit, Workers AI:Edit) **and** `CLOUDFLARE_ACCOUNT_ID`.
+>
+> The code is verified deploy-ready: `pnpm build` passes and `wrangler deploy
+> --dry-run` bundles the Worker with both bindings (`DB`, `ASSETS`) resolving.
+> The moment a credential lands, the turnkey sequence is:
+>
+> ```bash
+> pnpm db:create                 # creates the D1 db; writes real database_id into wrangler.jsonc
+> pnpm db:migrate                # applies migrations/0001_init.sql to remote D1
+> pnpm deploy                    # build + wrangler deploy → live workers.dev URL
+> ```
+>
+> Until then the live URL is GitHub Pages (below).
 
 ### 2. GitHub Pages (current live URL, CI-free)
 
