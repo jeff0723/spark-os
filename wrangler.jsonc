@@ -1,0 +1,21 @@
+{
+  // Spark OS — Cloudflare Worker (full-stack: Hono API + static React SPA).
+  // Deploy with `npm run deploy` (runs the Vite build, then `wrangler deploy`).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "spark-os",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-06-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    // Same directory Vite builds into and GitHub Pages publishes from.
+    "directory": "./docs",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "observability": {
+    "enabled": true
+  }
+  // M1 bindings get added here as tasks land, e.g.:
+  // "d1_databases": [{ "binding": "DB", "database_name": "spark-os", "database_id": "..." }],
+  // "ai": { "binding": "AI" }
+}

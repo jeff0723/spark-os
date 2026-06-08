@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# cloudflare / wrangler
+.wrangler/
+dist/
+
+# build artifacts (note: docs/ IS committed — it is the GitHub Pages publish dir)
+*.tsbuildinfo
+
+# env & secrets — never commit
+.dev.vars
+.env
+.env.*
+
+# os / editor
+.DS_Store
+*.log
